@@ -1,0 +1,145 @@
+<?php
+
+namespace Platform\Infra\Livewire\Server;
+
+use Illuminate\Support\Facades\Auth;
+use Livewire\Component;
+use Livewire\WithPagination;
+use Platform\Infra\Livewire\Concerns\EditsServerForm;
+use Platform\Infra\Models\InfraFinding;
+use Platform\Infra\Models\InfraLogEntry;
+use Platform\Infra\Models\InfraServer;
+use Platform\Infra\Services\InfraTeamResolver;
+
+class Show extends Component
+{
+    use EditsServerForm;
+    use WithPagination;
+
+    public InfraServer $server;
+
+    public string $tab = 'findings';
+    public string $findingFilter = 'open';
+    public string $logLevel = 'problems';
+
+    public bool $showEdit = false;
+    public bool $confirmDelete = false;
+
+    public bool $showNote = false;
+    public ?int $noteFindingId = null;
+    public string $noteStatus = '';
+    public string $note = '';
+
+    public function mount(InfraServer $server): void
+    {
+        abort_unless((int) $server->team_id === InfraTeamResolver::rootTeamId(Auth::user()), 404);
+        $this->server = $server;
+    }
+
+    public function setTab(string $tab): void
+    {
+        $this->tab = in_array($tab, ['findings', 'logs', 'metrics', 'details'], true) ? $tab : 'findings';
+        $this->resetPage();
+    }
+
+    public function updatedLogLevel(): void
+    {
+        $this->resetPage();
+    }
+
+    public function openEdit(): void
+    {
+        $this->resetValidation();
+        $this->form = $this->formFromServer($this->server);
+        $this->showEdit = true;
+    }
+
+    public function saveServer(): void
+    {
+        $data = $this->validatedForm($this->server->team_id, $this->server->id);
+        $this->server->update($data);
+        $this->showEdit = false;
+    }
+
+    public function deleteServer(): void
+    {
+        $this->server->delete();
+        $this->redirectRoute('infra.dashboard', navigate: true);
+    }
+
+    /** Status change with an optional note; "resolved" and "accepted" ask for the why. */
+    public function startTransition(int $findingId, string $status): void
+    {
+        if (!in_array($status, InfraFinding::STATUSES, true)) {
+            return;
+        }
+        if (in_array($status, [InfraFinding::STATUS_RESOLVED, InfraFinding::STATUS_ACCEPTED], true)) {
+            $this->noteFindingId = $findingId;
+            $this->noteStatus = $status;
+            $this->note = '';
+            $this->showNote = true;
+
+            return;
+        }
+        $this->applyTransition($findingId, $status, null);
+    }
+
+    public function confirmTransition(): void
+    {
+        if ($this->showNote && $this->noteFindingId) {
+            $this->applyTransition($this->noteFindingId, $this->noteStatus, $this->note);
+        }
+        $this->showNote = false;
+        $this->noteFindingId = null;
+    }
+
+    protected function applyTransition(int $findingId, string $status, ?string $note): void
+    {
+        $finding = InfraFinding::where('infra_server_id', $this->server->id)->find($findingId);
+        $finding?->transition($status, Auth::id(), $note);
+    }
+
+    public function render()
+    {
+        $findings = InfraFinding::query()
+            ->where('infra_server_id', $this->server->id)
+            ->when($this->findingFilter === 'open', fn ($q) => $q->open())
+            ->when(in_array($this->findingFilter, [InfraFinding::STATUS_RESOLVED, InfraFinding::STATUS_ACCEPTED], true),
+                fn ($q) => $q->where('status', $this->findingFilter))
+            ->orderByRaw("FIELD(severity, 'critical', 'warning', 'info')")
+            ->orderByDesc('last_seen_at')
+            ->limit(200)
+            ->get();
+
+        $logs = $this->tab === 'logs'
+            ? InfraLogEntry::query()
+                ->where('infra_server_id', $this->server->id)
+                ->when($this->logLevel === 'problems', fn ($q) => $q->whereIn('level', array_merge(InfraLogEntry::ERROR_LEVELS, ['warning'])))
+                ->when($this->logLevel === 'errors', fn ($q) => $q->whereIn('level', InfraLogEntry::ERROR_LEVELS))
+                ->orderByDesc('occurred_at')
+                ->paginate(50)
+            : null;
+
+        $metrics = $this->tab === 'metrics'
+            ? $this->server->metrics()->where('recorded_at', '>=', now()->subDays(7))->orderBy('recorded_at')->get()
+            : collect();
+
+        $this->server->loadCount([
+            'findings as open_critical_count' => fn ($q) => $q->open()->where('severity', InfraFinding::SEVERITY_CRITICAL),
+            'findings as open_warning_count' => fn ($q) => $q->open()->where('severity', InfraFinding::SEVERITY_WARNING),
+        ]);
+
+        $members = $this->showEdit
+            ? ($this->server->team?->users()->orderBy('users.name')->get(['users.id', 'users.name'])
+                ->map(fn ($u) => ['value' => $u->id, 'label' => $u->name])->all() ?? [])
+            : [];
+
+        return view('infra::livewire.server.show', [
+            'findings' => $findings,
+            'logs' => $logs,
+            'metrics' => $metrics,
+            'health' => $this->server->health(),
+            'options' => $this->formOptions() + ['members' => $members],
+        ])->layout('platform::layouts.app');
+    }
+}

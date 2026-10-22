@@ -1,0 +1,27 @@
+{
+    "name": "martin3r/platform-infra",
+    "description": "Infrastructure Module for Platform - server inventory, health reports, findings, logs",
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Platform Team",
+            "email": "team@platform.com"
+        }
+    ],
+    "require": {},
+    "autoload": {
+        "psr-4": {
+            "Platform\\Infra\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Platform\\Infra\\InfraServiceProvider"
+            ]
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
