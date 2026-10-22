@@ -199,7 +199,9 @@ class InfraReportService
             return null;
         }
 
-        // Reporter clocks are not trusted into the future.
+        // Store in the app's timezone (reporters send UTC/offsets), and never trust a clock into the future.
+        $t = $t->setTimezone(config('app.timezone'));
+
         return $t->isFuture() ? now() : $t;
     }
 
