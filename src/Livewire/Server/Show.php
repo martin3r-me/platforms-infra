@@ -38,13 +38,23 @@ class Show extends Component
 
     public function setTab(string $tab): void
     {
-        $this->tab = in_array($tab, ['findings', 'logs', 'metrics', 'details'], true) ? $tab : 'findings';
+        $this->tab = in_array($tab, ['findings', 'tasks', 'logs', 'metrics', 'details'], true) ? $tab : 'findings';
         $this->resetPage();
     }
 
     public function updatedLogLevel(): void
     {
         $this->resetPage();
+    }
+
+    /** "Maßnahme" on a finding: create a linked task and show the board. */
+    public function taskFromFinding(int $findingId): void
+    {
+        $finding = InfraFinding::where('infra_server_id', $this->server->id)->find($findingId);
+        if ($finding) {
+            app(\Platform\Infra\Services\InfraTaskService::class)->create($this->server->team_id, ['finding_id' => $finding->id], Auth::id());
+            $this->tab = 'tasks';
+        }
     }
 
     public function openEdit(): void

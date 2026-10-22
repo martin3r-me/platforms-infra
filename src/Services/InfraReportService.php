@@ -35,7 +35,11 @@ class InfraReportService
         DB::transaction(function () use ($server, $report, $reporterUserId, $observedAt, &$result) {
             $metrics = is_array($report['metrics'] ?? null) ? $report['metrics'] : null;
 
-            $server->last_seen_at = $observedAt;
+            // reachable=false: the observer could not reach the server (or only consulted the provider) —
+            // findings still count, but the server was not "seen".
+            if (($report['reachable'] ?? true) !== false) {
+                $server->last_seen_at = $observedAt;
+            }
             if (!empty($report['os'])) {
                 $server->os = mb_substr((string) $report['os'], 0, 255);
             }

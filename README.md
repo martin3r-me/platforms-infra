@@ -15,6 +15,7 @@ gepflegt vom Beobachter (Agent, z. B. Jazz) und kuratiert von Menschen.
 | `InfraServer` | Bestand: Name, Rolle, Umgebung, Anbieter, IPs, SSH-Ziel, Status, Verantwortlich. Letzter Zustand (`last_seen_at`, `last_report`) denormalisiert. |
 | `InfraFinding` | Ein Problem auf einem Server, dedupliziert über (Prüfung, Gegenstand). Lebenszyklus: offen → in Arbeit → behoben, oder akzeptiert. |
 | `InfraLogEntry` | Rohe Log-Zeilen (v. a. Warnungen/Fehler), Aufbewahrung `INFRA_LOG_RETENTION_DAYS` (14). |
+| `InfraTask` | Maßnahme: Arbeit an der Infrastruktur, optional an einem Server und/oder aus einem Befund. Board je Server (Reiter „Maßnahmen") und gesamt (`/infra/tasks`). Ob ein Befund wirklich weg ist, entscheidet die nächste Prüfung, nicht das Schließen der Maßnahme. |
 | `InfraMetric` | Zeitreihe je Meldung (Last, RAM, Swap, Platte max.), Aufbewahrung `INFRA_METRIC_RETENTION_DAYS` (30). |
 
 Zustand eines Servers wird **abgeleitet**, nie gespeichert: kritischer Befund → *Kritisch*,
@@ -29,6 +30,9 @@ keine Meldung seit `INFRA_STALE_AFTER_MINUTES` (30) → *Keine Meldung*, Warnung
 | POST | `/api/infra/agent/servers/{id}/report` | Eine Beobachtung: `metrics`, `checks`, `findings`, `logs` |
 | GET | `/api/infra/agent/findings` | Arbeitsliste (Default offen) |
 | POST | `/api/infra/agent/findings/{id}/status` | `acknowledged` / `resolved` / `open` (+ `note`) |
+| GET | `/api/infra/agent/tasks?scope=open\|mine\|all` | Maßnahmen (eigene zuerst) |
+| POST | `/api/infra/agent/tasks` | Maßnahme anlegen (`finding_id` → vorbelegt, eine offene je Befund) |
+| POST | `/api/infra/agent/tasks/{id}/status` | Status setzen (`claim` übernimmt eine freie) |
 
 **Snapshot-Semantik:** `checks` nennt die Prüfungen, die tatsächlich gelaufen sind. Offene Befunde
 dieser Prüfungen, die nicht erneut gemeldet werden, gelten als behoben. Ein behobener Befund, der
@@ -48,9 +52,11 @@ wieder auftaucht, öffnet sich erneut. *Akzeptieren* ist eine menschliche Entsch
 ## MCP-Tools
 
 `infra.servers.GET`, `infra.server.GET`, `infra.servers.POST`, `infra.servers.PUT`,
-`infra.findings.GET`, `infra.findings.PUT`.
+`infra.findings.GET`, `infra.findings.PUT`, `infra.tasks.GET`, `infra.tasks.POST`, `infra.tasks.PUT`.
+
+`reachable: false` in einem Report: Befunde zählen, der Server gilt aber nicht als „gesehen".
 
 ## Später
 
-Sites (Forge), Deployments, Zertifikate, Backups als eigene Objekte; Boards für Maßnahmen;
+Sites (Forge), Deployments, Zertifikate, Backups als eigene Objekte;
 Kennzahlen an die Organisation (EntityLinkProvider); Sync des Bestands aus Hetzner/Forge.

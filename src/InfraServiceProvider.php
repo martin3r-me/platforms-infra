@@ -36,6 +36,7 @@ class InfraServiceProvider extends ServiceProvider
         Relation::morphMap([
             'infra_server' => \Platform\Infra\Models\InfraServer::class,
             'infra_finding' => \Platform\Infra\Models\InfraFinding::class,
+            'infra_task' => \Platform\Infra\Models\InfraTask::class,
         ]);
 
         if (
@@ -118,6 +119,9 @@ class InfraServiceProvider extends ServiceProvider
             $registry->register(new \Platform\Infra\Tools\UpdateServerTool());
             $registry->register(new \Platform\Infra\Tools\ListFindingsTool());
             $registry->register(new \Platform\Infra\Tools\UpdateFindingTool());
+            $registry->register(new \Platform\Infra\Tools\ListTasksTool());
+            $registry->register(new \Platform\Infra\Tools\CreateTaskTool());
+            $registry->register(new \Platform\Infra\Tools\UpdateTaskTool());
         } catch (\Throwable $e) {
             \Log::warning('Infra: Tool-Registrierung fehlgeschlagen', ['error' => $e->getMessage()]);
         }

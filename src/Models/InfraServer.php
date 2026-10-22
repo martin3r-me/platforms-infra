@@ -85,6 +85,11 @@ class InfraServer extends Model
         return $this->hasMany(InfraLogEntry::class, 'infra_server_id');
     }
 
+    public function tasks(): HasMany
+    {
+        return $this->hasMany(InfraTask::class, 'infra_server_id');
+    }
+
     public function metrics(): HasMany
     {
         return $this->hasMany(InfraMetric::class, 'infra_server_id');

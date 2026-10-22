@@ -26,6 +26,11 @@ return [
                     'route' => 'infra.dashboard',
                     'icon'  => 'heroicon-o-home',
                 ],
+                [
+                    'label' => 'Maßnahmen',
+                    'route' => 'infra.tasks',
+                    'icon'  => 'heroicon-o-view-columns',
+                ],
             ],
         ],
     ],

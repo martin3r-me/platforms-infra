@@ -8,7 +8,9 @@ use Illuminate\Routing\Controller;
 use Illuminate\Validation\Rule;
 use Platform\Infra\Models\InfraFinding;
 use Platform\Infra\Models\InfraServer;
+use Platform\Infra\Models\InfraTask;
 use Platform\Infra\Services\InfraReportService;
+use Platform\Infra\Services\InfraTaskService;
 use Platform\Infra\Services\InfraTeamResolver;
 
 /**
@@ -95,6 +97,7 @@ class AgentController extends Controller
 
         $request->validate([
             'observed_at' => ['nullable', 'string'],
+            'reachable' => ['nullable', 'boolean'],
             'os' => ['nullable', 'string', 'max:255'],
             'metrics' => ['nullable', 'array'],
             'checks' => ['nullable', 'array'],
@@ -169,6 +172,86 @@ class AgentController extends Controller
         $finding->transition($data['status'], (int) $request->user()->id, $data['note'] ?? null);
 
         return response()->json(['data' => $finding->toAgentArray()]);
+    }
+
+    /** GET /api/infra/agent/tasks?scope=mine|open|all&server_id= — measures (default: open, mine first). */
+    public function tasks(Request $request): JsonResponse
+    {
+        $teamId = InfraTeamResolver::rootTeamId($request->user());
+        if (!$teamId) {
+            return response()->json(['message' => 'No team'], 403);
+        }
+        $me = (int) $request->user()->id;
+        $scope = $request->query('scope', 'open');
+
+        $rows = InfraTask::query()->with(['server:id,name', 'finding:id,status'])
+            ->where('team_id', $teamId)
+            ->when($scope !== 'all', fn ($q) => $q->notDone())
+            ->when($scope === 'mine', fn ($q) => $q->where('user_in_charge_id', $me))
+            ->when($request->filled('server_id'), fn ($q) => $q->where('infra_server_id', (int) $request->query('server_id')))
+            ->orderByRaw('CASE WHEN user_in_charge_id = ? THEN 0 WHEN user_in_charge_id IS NULL THEN 1 ELSE 2 END', [$me])
+            ->orderByRaw("FIELD(priority, 'high', 'normal', 'low')")
+            ->orderBy('position')
+            ->limit(200)
+            ->get()
+            ->map(fn (InfraTask $t) => $t->toAgentArray());
+
+        return response()->json(['data' => $rows]);
+    }
+
+    /** POST /api/infra/agent/tasks {title?, description?, priority?, server_id?, finding_id?, assign_self?} */
+    public function createTask(Request $request, InfraTaskService $service): JsonResponse
+    {
+        $teamId = InfraTeamResolver::rootTeamId($request->user());
+        if (!$teamId) {
+            return response()->json(['message' => 'No team'], 403);
+        }
+        $data = $request->validate([
+            'title' => ['nullable', 'string', 'max:255', 'required_without:finding_id'],
+            'description' => ['nullable', 'string', 'max:20000'],
+            'priority' => ['nullable', Rule::in(InfraTask::PRIORITIES)],
+            'server_id' => ['nullable', 'integer'],
+            'finding_id' => ['nullable', 'integer'],
+            'assign_self' => ['nullable', 'boolean'],
+        ]);
+        if ($request->boolean('assign_self')) {
+            $data['user_in_charge_id'] = (int) $request->user()->id;
+        }
+        // One open task per finding: return the existing one instead of a duplicate.
+        if (!empty($data['finding_id'])) {
+            $existing = InfraTask::where('team_id', $teamId)->where('infra_finding_id', (int) $data['finding_id'])->notDone()->first();
+            if ($existing) {
+                return response()->json(['data' => $existing->toAgentArray(), 'created' => false]);
+            }
+        }
+        $task = $service->create($teamId, $data, (int) $request->user()->id);
+
+        return response()->json(['data' => $task->fresh(['server', 'finding'])->toAgentArray(), 'created' => true], 201);
+    }
+
+    /** POST /api/infra/agent/tasks/{id}/status {status, note?, claim?} — move a measure; claim=true takes it over. */
+    public function taskStatus(Request $request, int $id, InfraTaskService $service): JsonResponse
+    {
+        $teamId = InfraTeamResolver::rootTeamId($request->user());
+        $task = InfraTask::where('team_id', $teamId)->find($id);
+        if (!$task) {
+            return response()->json(['message' => 'Task not found'], 404);
+        }
+        $data = $request->validate([
+            'status' => ['required', Rule::in(InfraTask::STATUSES)],
+            'note' => ['nullable', 'string', 'max:5000'],
+            'claim' => ['nullable', 'boolean'],
+        ]);
+        $me = (int) $request->user()->id;
+        if ($task->user_in_charge_id && $task->user_in_charge_id !== $me) {
+            return response()->json(['message' => 'Task belongs to someone else.'], 409);
+        }
+        if ($request->boolean('claim') && !$task->user_in_charge_id) {
+            $task->user_in_charge_id = $me;
+        }
+        $service->move($task, $data['status'], $data['note'] ?? null);
+
+        return response()->json(['data' => $task->fresh(['server', 'finding'])->toAgentArray()]);
     }
 
     protected function resolveServer(Request $request, int $id): ?InfraServer

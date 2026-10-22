@@ -51,6 +51,7 @@
 
         <x-nx-tabs>
             <x-nx-tab :active="$tab === 'findings'" wire:click="setTab('findings')">Befunde</x-nx-tab>
+            <x-nx-tab :active="$tab === 'tasks'" wire:click="setTab('tasks')">Maßnahmen</x-nx-tab>
             <x-nx-tab :active="$tab === 'logs'" wire:click="setTab('logs')">Logs</x-nx-tab>
             <x-nx-tab :active="$tab === 'metrics'" wire:click="setTab('metrics')">Verlauf</x-nx-tab>
             <x-nx-tab :active="$tab === 'details'" wire:click="setTab('details')">Details</x-nx-tab>
@@ -88,6 +89,7 @@
                                         <x-nx-button size="sm" variant="ghost" wire:click="startTransition({{ $f->id }}, 'acknowledged')">In Arbeit</x-nx-button>
                                     @endif
                                     @if($f->isOpen())
+                                        <x-nx-button size="sm" variant="ghost" wire:click="taskFromFinding({{ $f->id }})">Maßnahme</x-nx-button>
                                         <x-nx-button size="sm" variant="secondary" wire:click="startTransition({{ $f->id }}, 'resolved')">Behoben</x-nx-button>
                                         <x-nx-button size="sm" variant="ghost" wire:click="startTransition({{ $f->id }}, 'accepted')">Akzeptieren</x-nx-button>
                                     @else
@@ -105,6 +107,10 @@
                     @endforeach
                 </x-nx-card>
             @endif
+        @endif
+
+        @if($tab === 'tasks')
+            <livewire:infra.task-board :server-id="$server->id" :key="'tasks-' . $server->id" />
         @endif
 
         @if($tab === 'logs')
