@@ -155,6 +155,7 @@ class InfraReportService
             'swap_used_pct' => $this->pct($m['swap_used_pct'] ?? null),
             'disk_used_pct' => $this->pct($disk),
             'uptime_s' => isset($m['uptime_s']) && is_numeric($m['uptime_s']) ? (int) $m['uptime_s'] : null,
+            'ssh_failed' => isset($m['security']['ssh_failed']) && is_numeric($m['security']['ssh_failed']) ? (int) $m['security']['ssh_failed'] : null,
         ]);
 
         return true;

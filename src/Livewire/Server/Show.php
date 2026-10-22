@@ -41,7 +41,7 @@ class Show extends Component
 
     public function setTab(string $tab): void
     {
-        $this->tab = in_array($tab, ['findings', 'tasks', 'logs', 'metrics', 'details'], true) ? $tab : 'findings';
+        $this->tab = in_array($tab, ['findings', 'tasks', 'security', 'processes', 'logs', 'metrics', 'details'], true) ? $tab : 'findings';
         $this->resetPage();
     }
 
@@ -132,6 +132,7 @@ class Show extends Component
                 ->where('infra_server_id', $this->server->id)
                 ->when($this->logLevel === 'problems', fn ($q) => $q->whereIn('level', array_merge(InfraLogEntry::ERROR_LEVELS, ['warning'])))
                 ->when($this->logLevel === 'errors', fn ($q) => $q->whereIn('level', InfraLogEntry::ERROR_LEVELS))
+                ->when($this->logLevel === 'logins', fn ($q) => $q->where('source', 'ssh-login'))
                 ->orderByDesc('occurred_at')
                 ->paginate(50)
             : null;
@@ -150,6 +151,23 @@ class Show extends Component
                 ->map(fn ($u) => ['value' => $u->id, 'label' => $u->name])->all() ?? [])
             : [];
 
+        // Sicherheit: Fehlversuche je Tag (7 Tage) + letzte erfolgreiche Anmeldungen.
+        $security = null;
+        if ($this->tab === 'security') {
+            $daily = $this->server->metrics()
+                ->where('recorded_at', '>=', now()->subDays(6)->startOfDay())
+                ->whereNotNull('ssh_failed')
+                ->get(['recorded_at', 'ssh_failed'])
+                ->groupBy(fn ($m) => $m->recorded_at->toDateString())
+                ->map(fn ($g) => (int) $g->sum('ssh_failed'));
+            $days = collect(range(6, 0))->map(fn ($i) => now()->subDays($i)->toDateString())
+                ->mapWithKeys(fn ($d) => [$d => $daily[$d] ?? 0]);
+            $security = [
+                'failed_daily' => $days,
+                'logins' => $this->server->logEntries()->where('source', 'ssh-login')->orderByDesc('occurred_at')->limit(20)->get(),
+            ];
+        }
+
         $tabCounts = [
             'findings' => $this->server->findings()->open()->count(),
             'tasks' => $this->server->tasks()->notDone()->count(),
@@ -160,6 +178,7 @@ class Show extends Component
 
         return view('infra::livewire.server.show', [
             'tabCounts' => $tabCounts,
+            'security' => $security,
             'taskByFinding' => $taskByFinding,
             'findings' => $findings,
             'logs' => $logs,

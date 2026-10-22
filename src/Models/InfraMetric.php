@@ -20,6 +20,7 @@ class InfraMetric extends Model
         'swap_used_pct',
         'disk_used_pct',
         'uptime_s',
+        'ssh_failed',
     ];
 
     protected $casts = [
@@ -30,6 +31,7 @@ class InfraMetric extends Model
         'swap_used_pct' => 'float',
         'disk_used_pct' => 'float',
         'uptime_s' => 'integer',
+        'ssh_failed' => 'integer',
     ];
 
     public function server(): BelongsTo

@@ -50,7 +50,7 @@
         </x-nx-stat-grid>
 
         <x-nx-tabs>
-            @foreach(['findings' => 'Befunde', 'tasks' => 'Maßnahmen', 'logs' => 'Logs', 'metrics' => 'Verlauf', 'details' => 'Details'] as $key => $label)
+            @foreach(['findings' => 'Befunde', 'tasks' => 'Maßnahmen', 'security' => 'Sicherheit', 'processes' => 'Prozesse', 'logs' => 'Logs', 'metrics' => 'Verlauf', 'details' => 'Details'] as $key => $label)
                 <x-nx-tab :active="$tab === $key" wire:click="setTab('{{ $key }}')">
                     {{ $label }}
                     @if(($tabCounts[$key] ?? 0) > 0)
@@ -120,9 +120,17 @@
             <livewire:infra.task-board :server-id="$server->id" :key="'tasks-' . $server->id" />
         @endif
 
+        @if($tab === 'security')
+            @include('infra::livewire.server.security')
+        @endif
+
+        @if($tab === 'processes')
+            @include('infra::livewire.server.processes')
+        @endif
+
         @if($tab === 'logs')
             <div class="flex flex-wrap items-center gap-2">
-                @foreach(['problems' => 'Warnungen & Fehler', 'errors' => 'Nur Fehler', 'all' => 'Alle'] as $key => $label)
+                @foreach(['problems' => 'Warnungen & Fehler', 'errors' => 'Nur Fehler', 'logins' => 'Anmeldungen', 'all' => 'Alle'] as $key => $label)
                     <x-nx-button :variant="$logLevel === $key ? 'primary' : 'ghost'" size="sm" wire:click="$set('logLevel', '{{ $key }}')">{{ $label }}</x-nx-button>
                 @endforeach
             </div>
