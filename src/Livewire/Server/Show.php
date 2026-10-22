@@ -3,12 +3,14 @@
 namespace Platform\Infra\Livewire\Server;
 
 use Illuminate\Support\Facades\Auth;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Platform\Infra\Livewire\Concerns\EditsServerForm;
 use Platform\Infra\Models\InfraFinding;
 use Platform\Infra\Models\InfraLogEntry;
 use Platform\Infra\Models\InfraServer;
+use Platform\Infra\Models\InfraTask;
 use Platform\Infra\Services\InfraTeamResolver;
 
 class Show extends Component
@@ -18,6 +20,7 @@ class Show extends Component
 
     public InfraServer $server;
 
+    #[Url(except: 'findings')]
     public string $tab = 'findings';
     public string $findingFilter = 'open';
     public string $logLevel = 'problems';
@@ -52,7 +55,10 @@ class Show extends Component
     {
         $finding = InfraFinding::where('infra_server_id', $this->server->id)->find($findingId);
         if ($finding) {
-            app(\Platform\Infra\Services\InfraTaskService::class)->create($this->server->team_id, ['finding_id' => $finding->id], Auth::id());
+            $open = InfraTask::where('infra_finding_id', $finding->id)->notDone()->exists();
+            if (!$open) {
+                app(\Platform\Infra\Services\InfraTaskService::class)->create($this->server->team_id, ['finding_id' => $finding->id], Auth::id());
+            }
             $this->tab = 'tasks';
         }
     }
@@ -144,7 +150,17 @@ class Show extends Component
                 ->map(fn ($u) => ['value' => $u->id, 'label' => $u->name])->all() ?? [])
             : [];
 
+        $tabCounts = [
+            'findings' => $this->server->findings()->open()->count(),
+            'tasks' => $this->server->tasks()->notDone()->count(),
+            'logs' => $this->server->logEntries()->whereIn('level', InfraLogEntry::ERROR_LEVELS)->where('occurred_at', '>=', now()->subDay())->count(),
+        ];
+        $taskByFinding = InfraTask::where('infra_server_id', $this->server->id)->notDone()
+            ->whereNotNull('infra_finding_id')->pluck('id', 'infra_finding_id');
+
         return view('infra::livewire.server.show', [
+            'tabCounts' => $tabCounts,
+            'taskByFinding' => $taskByFinding,
             'findings' => $findings,
             'logs' => $logs,
             'metrics' => $metrics,

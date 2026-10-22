@@ -3,11 +3,13 @@
 namespace Platform\Infra\Livewire;
 
 use Illuminate\Support\Facades\Auth;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 use Platform\Infra\Livewire\Concerns\EditsServerForm;
 use Platform\Infra\Models\InfraFinding;
 use Platform\Infra\Models\InfraLogEntry;
 use Platform\Infra\Models\InfraServer;
+use Platform\Infra\Models\InfraTask;
 use Platform\Infra\Services\InfraTeamResolver;
 
 class Dashboard extends Component
@@ -15,7 +17,21 @@ class Dashboard extends Component
     use EditsServerForm;
 
     public bool $showCreate = false;
+
+    #[Url(except: false)]
     public bool $showRetired = false;
+
+    #[Url(except: '')]
+    public string $search = '';
+
+    /** all | problems | ok | silent */
+    #[Url(except: 'all')]
+    public string $filter = 'all';
+
+    public function setFilter(string $filter): void
+    {
+        $this->filter = in_array($filter, ['all', 'problems', 'ok', 'silent'], true) ? $filter : 'all';
+    }
 
     public function openCreate(): void
     {
@@ -50,36 +66,59 @@ class Dashboard extends Component
     {
         $teamId = $this->teamId();
 
-        $servers = InfraServer::query()
+        $all = InfraServer::query()
             ->where('team_id', $teamId)
             ->when(!$this->showRetired, fn ($q) => $q->watched())
             ->withCount([
                 'findings as open_critical_count' => fn ($q) => $q->open()->where('severity', InfraFinding::SEVERITY_CRITICAL),
                 'findings as open_warning_count' => fn ($q) => $q->open()->where('severity', InfraFinding::SEVERITY_WARNING),
+                'tasks as open_tasks_count' => fn ($q) => $q->notDone(),
             ])
-            ->orderBy('name')
-            ->get();
+            ->get()
+            ->each(fn (InfraServer $s) => $s->setAttribute('health_state', $s->health()));
 
-        $health = $servers->map(fn ($s) => $s->health());
+        $counts = [
+            'all' => $all->count(),
+            'problems' => $all->whereIn('health_state', [InfraServer::HEALTH_CRITICAL, InfraServer::HEALTH_WARNING])->count(),
+            'ok' => $all->where('health_state', InfraServer::HEALTH_OK)->count(),
+            'silent' => $all->whereIn('health_state', [InfraServer::HEALTH_STALE, InfraServer::HEALTH_UNKNOWN])->count(),
+        ];
+
+        $term = mb_strtolower(trim($this->search));
+        $servers = $all
+            ->filter(fn ($s) => match ($this->filter) {
+                'problems' => in_array($s->health_state, [InfraServer::HEALTH_CRITICAL, InfraServer::HEALTH_WARNING], true),
+                'ok' => $s->health_state === InfraServer::HEALTH_OK,
+                'silent' => in_array($s->health_state, [InfraServer::HEALTH_STALE, InfraServer::HEALTH_UNKNOWN], true),
+                default => true,
+            })
+            ->filter(fn ($s) => $term === '' || str_contains(mb_strtolower(implode(' ', [$s->name, $s->role, $s->ip_private, $s->ip_public, $s->hostname])), $term))
+            ->sortBy([
+                fn ($a, $b) => InfraServer::healthRank($a->health_state) <=> InfraServer::healthRank($b->health_state),
+                fn ($a, $b) => strnatcasecmp($a->name, $b->name),
+            ])
+            ->values();
+
         $openFindings = InfraFinding::query()
             ->with('server:id,name')
             ->where('team_id', $teamId)
             ->open()
             ->orderByRaw("FIELD(severity, 'critical', 'warning', 'info')")
             ->orderByDesc('last_seen_at')
-            ->limit(15)
+            ->limit(12)
             ->get();
 
         $stats = [
-            'servers' => $servers->where('status', '!=', InfraServer::STATUS_RETIRED)->count(),
-            'reporting' => $health->filter(fn ($h) => in_array($h, [InfraServer::HEALTH_OK, InfraServer::HEALTH_WARNING, InfraServer::HEALTH_CRITICAL], true))->count(),
-            'silent' => $health->filter(fn ($h) => in_array($h, [InfraServer::HEALTH_STALE, InfraServer::HEALTH_UNKNOWN], true))->count(),
+            'servers' => $all->where('status', '!=', InfraServer::STATUS_RETIRED)->count(),
             'critical' => InfraFinding::where('team_id', $teamId)->open()->where('severity', InfraFinding::SEVERITY_CRITICAL)->count(),
             'warning' => InfraFinding::where('team_id', $teamId)->open()->where('severity', InfraFinding::SEVERITY_WARNING)->count(),
+            'tasks_open' => InfraTask::where('team_id', $teamId)->notDone()->count(),
+            'tasks_mine' => InfraTask::where('team_id', $teamId)->notDone()->where('user_in_charge_id', Auth::id())->count(),
             'errors_24h' => InfraLogEntry::where('team_id', $teamId)
                 ->whereIn('level', InfraLogEntry::ERROR_LEVELS)
                 ->where('occurred_at', '>=', now()->subDay())
                 ->count(),
+            'last_check' => $all->max('last_seen_at'),
         ];
 
         $recentlyResolved = InfraFinding::query()
@@ -92,6 +131,7 @@ class Dashboard extends Component
 
         return view('infra::livewire.dashboard', [
             'servers' => $servers,
+            'counts' => $counts,
             'openFindings' => $openFindings,
             'recentlyResolved' => $recentlyResolved,
             'stats' => $stats,

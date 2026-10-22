@@ -24,7 +24,7 @@
     </x-slot>
 
     <x-ui-page-container width="contained" spacing="space-y-6">
-        <div class="flex flex-wrap items-center gap-2">
+        <div wire:poll.60s.visible class="flex flex-wrap items-center gap-2">
             <x-nx-badge :variant="InfraServer::healthVariant($health)" dot>{{ InfraServer::healthLabel($health) }}</x-nx-badge>
             @if($server->status !== InfraServer::STATUS_ACTIVE)
                 <x-nx-badge>{{ $server->status === InfraServer::STATUS_MAINTENANCE ? 'Wartung' : 'Stillgelegt' }}</x-nx-badge>
@@ -50,11 +50,14 @@
         </x-nx-stat-grid>
 
         <x-nx-tabs>
-            <x-nx-tab :active="$tab === 'findings'" wire:click="setTab('findings')">Befunde</x-nx-tab>
-            <x-nx-tab :active="$tab === 'tasks'" wire:click="setTab('tasks')">Maßnahmen</x-nx-tab>
-            <x-nx-tab :active="$tab === 'logs'" wire:click="setTab('logs')">Logs</x-nx-tab>
-            <x-nx-tab :active="$tab === 'metrics'" wire:click="setTab('metrics')">Verlauf</x-nx-tab>
-            <x-nx-tab :active="$tab === 'details'" wire:click="setTab('details')">Details</x-nx-tab>
+            @foreach(['findings' => 'Befunde', 'tasks' => 'Maßnahmen', 'logs' => 'Logs', 'metrics' => 'Verlauf', 'details' => 'Details'] as $key => $label)
+                <x-nx-tab :active="$tab === $key" wire:click="setTab('{{ $key }}')">
+                    {{ $label }}
+                    @if(($tabCounts[$key] ?? 0) > 0)
+                        <span class="ml-1 rounded-full bg-[color:var(--nx-hover)] px-1.5 text-xs tabular-nums text-[color:var(--nx-muted)]">{{ $tabCounts[$key] }}</span>
+                    @endif
+                </x-nx-tab>
+            @endforeach
         </x-nx-tabs>
 
         @if($tab === 'findings')
@@ -89,7 +92,11 @@
                                         <x-nx-button size="sm" variant="ghost" wire:click="startTransition({{ $f->id }}, 'acknowledged')">In Arbeit</x-nx-button>
                                     @endif
                                     @if($f->isOpen())
-                                        <x-nx-button size="sm" variant="ghost" wire:click="taskFromFinding({{ $f->id }})">Maßnahme</x-nx-button>
+                                        @if($taskByFinding->has($f->id))
+                                            <x-nx-button size="sm" variant="ghost" wire:click="setTab('tasks')">Maßnahme offen</x-nx-button>
+                                        @else
+                                            <x-nx-button size="sm" variant="ghost" wire:click="taskFromFinding({{ $f->id }})">Maßnahme anlegen</x-nx-button>
+                                        @endif
                                         <x-nx-button size="sm" variant="secondary" wire:click="startTransition({{ $f->id }}, 'resolved')">Behoben</x-nx-button>
                                         <x-nx-button size="sm" variant="ghost" wire:click="startTransition({{ $f->id }}, 'accepted')">Akzeptieren</x-nx-button>
                                     @else
@@ -223,7 +230,7 @@
                                     <x-nx-table-row>
                                         <x-nx-table-cell class="font-mono text-xs">{{ $d['mount'] ?? '?' }}</x-nx-table-cell>
                                         <x-nx-table-cell align="right" class="tabular-nums">{{ isset($d['size_gb']) ? number_format((float) $d['size_gb'], 0, ',', '.') . ' GB' : '—' }}</x-nx-table-cell>
-                                        <x-nx-table-cell align="right" class="tabular-nums">{{ isset($d['used_pct']) ? round((float) $d['used_pct']) . ' %' : '—' }}</x-nx-table-cell>
+                                        <x-nx-table-cell align="right">@include('infra::livewire.partials.meter', ['value' => $d['used_pct'] ?? null, 'warn' => 85, 'crit' => 95])</x-nx-table-cell>
                                     </x-nx-table-row>
                                 @endforeach
                             </x-nx-table-body>

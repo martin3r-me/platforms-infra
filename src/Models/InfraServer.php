@@ -143,6 +143,18 @@ class InfraServer extends Model
         };
     }
 
+    /** Sort order: what needs attention first. */
+    public static function healthRank(string $health): int
+    {
+        return match ($health) {
+            self::HEALTH_CRITICAL => 0,
+            self::HEALTH_WARNING => 1,
+            self::HEALTH_STALE => 2,
+            self::HEALTH_UNKNOWN => 3,
+            default => 4,
+        };
+    }
+
     public static function healthVariant(string $health): string
     {
         return match ($health) {
