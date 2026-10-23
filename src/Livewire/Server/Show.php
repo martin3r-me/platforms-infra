@@ -5,6 +5,8 @@ namespace Platform\Infra\Livewire\Server;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Url;
 use Livewire\Component;
+use Illuminate\Database\Eloquent\Model;
+use Platform\Core\Livewire\Concerns\HasPageContext;
 use Livewire\WithPagination;
 use Platform\Infra\Livewire\Concerns\EditsServerForm;
 use Platform\Infra\Models\InfraFinding;
@@ -16,6 +18,7 @@ use Platform\Infra\Services\InfraTeamResolver;
 class Show extends Component
 {
     use EditsServerForm;
+    use HasPageContext;
     use WithPagination;
 
     public InfraServer $server;
@@ -37,6 +40,19 @@ class Show extends Component
     {
         abort_unless((int) $server->team_id === InfraTeamResolver::rootTeamId(Auth::user()), 404);
         $this->server = $server;
+    }
+
+    protected function pageContext(): ?Model
+    {
+        return $this->server;
+    }
+
+    protected function pageContextOptions(): array
+    {
+        return [
+            'url' => route('infra.servers.show', $this->server),
+            'source' => 'infra.server.view',
+        ];
     }
 
     public function setTab(string $tab): void
