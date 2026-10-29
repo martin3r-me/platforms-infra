@@ -47,6 +47,7 @@ class InfraServiceProvider extends ServiceProvider
             PlatformCore::registerModule([
                 'key'        => 'infra',
                 'title'      => 'Infra',
+                'group'      => 'dev',
                 'routing'    => config('infra.routing'),
                 'guard'      => config('infra.guard'),
                 'navigation' => config('infra.navigation'),
