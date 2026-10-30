@@ -6,12 +6,14 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Platform\Organization\Contracts\HasChildContextRelations;
 use Platform\Organization\Traits\HasTimeEntries;
+use Platform\Infra\Models\Concerns\LogsInfraActivity;
 use Symfony\Component\Uid\UuidV7;
 
-class InfraServer extends Model
+class InfraServer extends Model implements HasChildContextRelations
 {
-    use SoftDeletes, HasTimeEntries;
+    use SoftDeletes, HasTimeEntries, LogsInfraActivity;
 
     public const STATUS_ACTIVE = 'active';
     public const STATUS_MAINTENANCE = 'maintenance';
@@ -56,6 +58,12 @@ class InfraServer extends Model
         'last_seen_at' => 'datetime',
         'last_report' => 'array',
     ];
+
+    /** Was der Observer bei jeder Meldung schreibt, ist keine Aktivität. */
+    protected function activityQuietAttributes(): array
+    {
+        return ['last_seen_at', 'os', 'last_report'];
+    }
 
     protected static function booted(): void
     {
@@ -202,5 +210,11 @@ class InfraServer extends Model
             'health' => $this->health(),
             'last_seen_at' => $this->last_seen_at?->toIso8601String(),
         ];
+    }
+
+    /** Zeiten auf Maßnahmen zählen beim Server mit. */
+    public static function childContextRelations(): array
+    {
+        return ['tasks'];
     }
 }

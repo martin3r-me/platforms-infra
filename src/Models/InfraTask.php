@@ -5,6 +5,8 @@ namespace Platform\Infra\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Platform\Organization\Traits\HasTimeEntries;
+use Platform\Infra\Models\Concerns\LogsInfraActivity;
 use Symfony\Component\Uid\UuidV7;
 
 /**
@@ -14,7 +16,7 @@ use Symfony\Component\Uid\UuidV7;
  */
 class InfraTask extends Model
 {
-    use SoftDeletes;
+    use SoftDeletes, HasTimeEntries, LogsInfraActivity;
 
     public const STATUS_OPEN = 'open';
     public const STATUS_IN_PROGRESS = 'in_progress';
@@ -48,6 +50,12 @@ class InfraTask extends Model
         'due_date' => 'date',
         'done_at' => 'datetime',
     ];
+
+    /** Umsortieren auf dem Board ist keine Aktivität. */
+    protected function activityQuietAttributes(): array
+    {
+        return ['position'];
+    }
 
     protected static function booted(): void
     {

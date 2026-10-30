@@ -74,7 +74,7 @@ class InfraEntityLinkProvider implements EntityLinkProvider, HasMetricDefinition
     public function timeTrackableCascades(): array
     {
         return [
-            'infra_server' => [InfraServer::class, []],
+            'infra_server' => [InfraServer::class, ['tasks']],
         ];
     }
 

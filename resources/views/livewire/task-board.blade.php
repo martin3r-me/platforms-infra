@@ -68,6 +68,11 @@
                 <x-nx-input-select name="edit.user_in_charge_id" label="Verantwortlich" wire:model="edit.user_in_charge_id" :options="$members" nullable nullLabel="— niemand —" />
             </div>
             <x-nx-input-textarea name="edit.done_note" label="Ergebnis / Notiz" wire:model="edit.done_note" :rows="2" />
+            @if($showEdit && $editId)
+                <div class="border-t border-[color:var(--nx-line)] pt-4">
+                    <livewire:infra.task-time :task-id="$editId" :key="'task-time-' . $editId" />
+                </div>
+            @endif
         </div>
         <x-slot name="footer">
             <div class="flex flex-wrap items-center justify-between gap-3">

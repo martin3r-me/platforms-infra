@@ -4,6 +4,7 @@ namespace Platform\Infra\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Platform\Infra\Models\Concerns\LogsInfraActivity;
 use Symfony\Component\Uid\UuidV7;
 
 /**
@@ -13,6 +14,10 @@ use Symfony\Component\Uid\UuidV7;
  */
 class InfraFinding extends Model
 {
+    use LogsInfraActivity {
+        recordActivity as baseRecordActivity;
+    }
+
     public const STATUS_OPEN = 'open';
     public const STATUS_ACKNOWLEDGED = 'acknowledged';
     public const STATUS_RESOLVED = 'resolved';
@@ -55,6 +60,22 @@ class InfraFinding extends Model
         'last_seen_at' => 'datetime',
         'resolved_at' => 'datetime',
     ];
+
+    /**
+     * Wiederholte Meldungen (Zähler, Zeitstempel, aktuelle Messwerte im Text) sind keine
+     * Aktivität — nur Schwere und Status. Info-Befunde bleiben ganz aus dem Strom.
+     */
+    protected function activityQuietAttributes(): array
+    {
+        return ['title', 'detail', 'sample', 'occurrence_count', 'last_seen_at', 'fingerprint', 'first_seen_at'];
+    }
+
+    public function recordActivity(string $event, string $activityType): void
+    {
+        if ($this->severity !== self::SEVERITY_INFO) {
+            $this->baseRecordActivity($event, $activityType);
+        }
+    }
 
     protected static function booted(): void
     {
