@@ -6,11 +6,12 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Platform\Organization\Traits\HasTimeEntries;
 use Symfony\Component\Uid\UuidV7;
 
 class InfraServer extends Model
 {
-    use SoftDeletes;
+    use SoftDeletes, HasTimeEntries;
 
     public const STATUS_ACTIVE = 'active';
     public const STATUS_MAINTENANCE = 'maintenance';

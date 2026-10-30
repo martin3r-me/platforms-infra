@@ -77,6 +77,14 @@ class InfraServiceProvider extends ServiceProvider
 
         $this->registerLivewireComponents();
         $this->registerTools();
+
+        // Server in die Orga hängen (DimensionLink) + als Zeiterfassungs-Kontext (lose Kopplung)
+        try {
+            resolve(\Platform\Organization\Services\EntityLinkRegistry::class)
+                ->register(new \Platform\Infra\Organization\InfraEntityLinkProvider());
+        } catch (\Throwable $e) {
+            // Organization-Modul nicht geladen
+        }
     }
 
     protected function registerLivewireComponents(): void
