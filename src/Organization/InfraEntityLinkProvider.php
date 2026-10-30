@@ -18,13 +18,16 @@ class InfraEntityLinkProvider implements EntityLinkProvider, HasMetricDefinition
 {
     public function morphAliases(): array
     {
-        return ['infra_server'];
+        return ['infra_server', 'infra_task', 'infra_finding'];
     }
 
     public function linkTypeConfig(): array
     {
         return [
             'infra_server' => ['label' => 'Server', 'singular' => 'Server', 'icon' => 'server', 'route' => 'infra.servers.show'],
+            // Nur für den Aktivitätsstrom (Labels) — gehängt wird der Server, nicht seine Kinder.
+            'infra_task' => ['label' => 'Maßnahmen', 'singular' => 'Maßnahme', 'icon' => 'wrench-screwdriver', 'route' => null],
+            'infra_finding' => ['label' => 'Befunde', 'singular' => 'Befund', 'icon' => 'exclamation-triangle', 'route' => null],
         ];
     }
 
@@ -65,7 +68,7 @@ class InfraEntityLinkProvider implements EntityLinkProvider, HasMetricDefinition
                 ['field' => 'environment', 'format' => 'badge'],
                 ['field' => 'responsible', 'format' => 'text'],
                 ['field' => 'findings_open', 'format' => 'count', 'suffix' => 'Befunde'],
-                ['field' => 'tasks_open', 'format' => 'count', 'suffix' => 'Aufgaben'],
+                ['field' => 'tasks_open', 'format' => 'count', 'suffix' => 'Maßnahmen'],
                 ['field' => 'is_active', 'format' => 'boolean_active'],
             ],
         ];
@@ -78,9 +81,17 @@ class InfraEntityLinkProvider implements EntityLinkProvider, HasMetricDefinition
         ];
     }
 
+    /** Maßnahmen und Befunde eines Servers erscheinen im Aktivitätsstrom seines Knotens. */
     public function activityChildren(string $morphAlias, array $linkableIds): array
     {
-        return [];
+        if ($morphAlias !== 'infra_server' || empty($linkableIds)) {
+            return [];
+        }
+
+        return array_filter([
+            InfraTask::class => InfraTask::whereIn('infra_server_id', $linkableIds)->pluck('id')->all(),
+            InfraFinding::class => InfraFinding::whereIn('infra_server_id', $linkableIds)->pluck('id')->all(),
+        ]);
     }
 
     public function metrics(string $morphAlias, array $linksByEntity): array
@@ -149,8 +160,8 @@ class InfraEntityLinkProvider implements EntityLinkProvider, HasMetricDefinition
             'infra_servers_active'    => ['label' => 'Aktive Server', 'group' => 'infra', 'direction' => 'neutral', 'unit' => 'count', 'dimension' => 'org_capital', 'type' => 'stock', 'aggregation_mode' => 'rolled_up', 'basis' => 'stichtag'],
             'infra_findings_critical' => ['label' => 'Kritische Befunde (offen)', 'group' => 'infra', 'direction' => 'down', 'unit' => 'count', 'dimension' => 'quality', 'type' => 'stock', 'aggregation_mode' => 'rolled_up', 'basis' => 'stichtag'],
             'infra_findings_warning'  => ['label' => 'Warnungen (offen)', 'group' => 'infra', 'direction' => 'down', 'unit' => 'count', 'dimension' => 'quality', 'type' => 'stock', 'aggregation_mode' => 'rolled_up', 'basis' => 'stichtag'],
-            'infra_tasks_open'        => ['label' => 'Infra-Aufgaben (offen)', 'group' => 'infra', 'direction' => 'down', 'unit' => 'count', 'dimension' => 'complexity', 'type' => 'stock', 'aggregation_mode' => 'rolled_up', 'basis' => 'stichtag'],
-            'infra_tasks_done'        => ['label' => 'Infra-Aufgaben (erledigt)', 'group' => 'infra', 'direction' => 'up', 'unit' => 'count', 'pair' => 'infra_tasks_open', 'dimension' => 'throughput', 'type' => 'flow', 'aggregation_mode' => 'rolled_up', 'basis' => 'cumulative_since_start'],
+            'infra_tasks_open'        => ['label' => 'Infra-Maßnahmen (offen)', 'group' => 'infra', 'direction' => 'down', 'unit' => 'count', 'dimension' => 'complexity', 'type' => 'stock', 'aggregation_mode' => 'rolled_up', 'basis' => 'stichtag'],
+            'infra_tasks_done'        => ['label' => 'Infra-Maßnahmen (erledigt)', 'group' => 'infra', 'direction' => 'up', 'unit' => 'count', 'pair' => 'infra_tasks_open', 'dimension' => 'throughput', 'type' => 'flow', 'aggregation_mode' => 'rolled_up', 'basis' => 'cumulative_since_start'],
         ];
     }
 
