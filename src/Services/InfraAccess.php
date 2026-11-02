@@ -14,7 +14,7 @@ use Platform\Infra\Models\InfraTask;
  * strukturell im Org-Graphen erreichbar (may). read < write < manage.
  *
  * Sonderfall „unbeansprucht": Server, die der Observer-Agent angemeldet hat (Ersteller
- * fehlt oder ist ein KI-User), und die noch nirgends in der Orga hängen. Die sieht und
+ * fehlt, ist ein KI-User oder der Bot-User einer Agent-Einheit wie Jazz) und die noch nirgends in der Orga hängen. Die sieht und
  * bearbeitet jeder infra-Nutzer des Root-Teams — sonst könnte sie niemand übernehmen
  * oder aufhängen. Löschen (manage) bleibt dem Graphen bzw. Ersteller vorbehalten.
  *
@@ -93,7 +93,7 @@ class InfraAccess
      */
     public function claim(User $user, InfraServer $server): bool
     {
-        if ($user->isAiUser() || ! $this->isUnclaimed($server)) {
+        if (! $this->hasHumanCreator((int) $user->id) || ! $this->isUnclaimed($server)) {
             return false;
         }
         $server->created_by_user_id = $user->id;
@@ -122,8 +122,22 @@ class InfraAccess
             return false;
         }
 
-        return $this->cache["h:{$userId}"] ??= (bool) User::whereKey($userId)
-            ->where(fn ($q) => $q->whereNull('type')->orWhere('type', '!=', 'ai_user'))
+        return $this->cache["h:{$userId}"] ??= (
+            User::whereKey($userId)->where(fn ($q) => $q->whereNull('type')->orWhere('type', '!=', 'ai_user'))->exists()
+            && ! $this->isAgentUser($userId)
+        );
+    }
+
+    /** Bot-User eines Agenten: hängt an einer Org-Einheit vom Typ „agent" (z. B. Jazz). */
+    private function isAgentUser(int $userId): bool
+    {
+        if (! class_exists(\Platform\Organization\Models\OrganizationEntity::class)) {
+            return false;
+        }
+
+        return \Platform\Organization\Models\OrganizationEntity::query()
+            ->where('linked_user_id', $userId)
+            ->agents()
             ->exists();
     }
 }
