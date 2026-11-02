@@ -10,6 +10,7 @@ use Platform\Infra\Models\InfraFinding;
 use Platform\Infra\Models\InfraLogEntry;
 use Platform\Infra\Models\InfraServer;
 use Platform\Infra\Models\InfraTask;
+use Platform\Infra\Services\InfraAccess;
 use Platform\Infra\Services\InfraTeamResolver;
 
 class Dashboard extends Component
@@ -42,6 +43,7 @@ class Dashboard extends Component
 
     public function createServer(): void
     {
+        $this->authorize('create', InfraServer::class);
         $teamId = $this->teamId();
         $data = $this->validatedForm($teamId);
 
@@ -65,6 +67,8 @@ class Dashboard extends Component
     public function render()
     {
         $teamId = $this->teamId();
+        $access = app(InfraAccess::class);
+        $user = Auth::user();
 
         $all = InfraServer::query()
             ->where('team_id', $teamId)
@@ -74,8 +78,13 @@ class Dashboard extends Component
                 'findings as open_warning_count' => fn ($q) => $q->open()->where('severity', InfraFinding::SEVERITY_WARNING),
                 'tasks as open_tasks_count' => fn ($q) => $q->notDone(),
             ])
-            ->get()
+            ->get();
+        $all = $access->visibleServers($user, $all)
             ->each(fn (InfraServer $s) => $s->setAttribute('health_state', $s->health()));
+        // Befunde/Logs/Maßnahmen folgen dem Server — nur die sichtbaren zählen
+        $visibleIds = $access->visibleServerIds($user, $teamId);
+        $visibleTaskIds = $access->visibleTasks($user, InfraTask::with('server')->where('team_id', $teamId)->notDone()->get())
+            ->pluck('id')->all();
 
         $counts = [
             'all' => $all->count(),
@@ -102,6 +111,7 @@ class Dashboard extends Component
         $openFindings = InfraFinding::query()
             ->with('server:id,name')
             ->where('team_id', $teamId)
+            ->whereIn('infra_server_id', $visibleIds)
             ->open()
             ->orderByRaw("FIELD(severity, 'critical', 'warning', 'info')")
             ->orderByDesc('last_seen_at')
@@ -110,11 +120,12 @@ class Dashboard extends Component
 
         $stats = [
             'servers' => $all->where('status', '!=', InfraServer::STATUS_RETIRED)->count(),
-            'critical' => InfraFinding::where('team_id', $teamId)->open()->where('severity', InfraFinding::SEVERITY_CRITICAL)->count(),
-            'warning' => InfraFinding::where('team_id', $teamId)->open()->where('severity', InfraFinding::SEVERITY_WARNING)->count(),
-            'tasks_open' => InfraTask::where('team_id', $teamId)->notDone()->count(),
-            'tasks_mine' => InfraTask::where('team_id', $teamId)->notDone()->where('user_in_charge_id', Auth::id())->count(),
+            'critical' => InfraFinding::where('team_id', $teamId)->whereIn('infra_server_id', $visibleIds)->open()->where('severity', InfraFinding::SEVERITY_CRITICAL)->count(),
+            'warning' => InfraFinding::where('team_id', $teamId)->whereIn('infra_server_id', $visibleIds)->open()->where('severity', InfraFinding::SEVERITY_WARNING)->count(),
+            'tasks_open' => count($visibleTaskIds),
+            'tasks_mine' => InfraTask::whereIn('id', $visibleTaskIds)->where('user_in_charge_id', Auth::id())->count(),
             'errors_24h' => InfraLogEntry::where('team_id', $teamId)
+                ->whereIn('infra_server_id', $visibleIds)
                 ->whereIn('level', InfraLogEntry::ERROR_LEVELS)
                 ->where('occurred_at', '>=', now()->subDay())
                 ->count(),
@@ -124,6 +135,7 @@ class Dashboard extends Component
         $recentlyResolved = InfraFinding::query()
             ->with('server:id,name')
             ->where('team_id', $teamId)
+            ->whereIn('infra_server_id', $visibleIds)
             ->where('status', InfraFinding::STATUS_RESOLVED)
             ->orderByDesc('resolved_at')
             ->limit(8)

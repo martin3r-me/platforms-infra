@@ -7,6 +7,7 @@ use Illuminate\Validation\Rule;
 use Livewire\Component;
 use Platform\Infra\Models\InfraServer;
 use Platform\Infra\Models\InfraTask;
+use Platform\Infra\Services\InfraAccess;
 use Platform\Infra\Services\InfraTaskService;
 use Platform\Infra\Services\InfraTeamResolver;
 
@@ -16,6 +17,7 @@ use Platform\Infra\Services\InfraTeamResolver;
  */
 class TaskBoard extends Component
 {
+    #[\Livewire\Attributes\Locked]
     public ?int $serverId = null;
 
     public string $newTitle = '';
@@ -26,6 +28,15 @@ class TaskBoard extends Component
     public ?int $editId = null;
     public array $edit = [];
 
+    public function mount(?int $serverId = null): void
+    {
+        if ($serverId) {
+            $server = InfraServer::where('team_id', $this->teamId())->findOrFail($serverId);
+            $this->authorize('view', $server);
+        }
+        $this->serverId = $serverId;
+    }
+
     protected function teamId(): int
     {
         $teamId = InfraTeamResolver::rootTeamId(Auth::user());
@@ -34,20 +45,38 @@ class TaskBoard extends Component
         return $teamId;
     }
 
-    protected function task(int $id): ?InfraTask
+    /** Maßnahme des Teams, für die der User die Fähigkeit $cap hat (sonst null). */
+    protected function task(int $id, string $cap = 'write'): ?InfraTask
     {
-        return InfraTask::where('team_id', $this->teamId())
+        $task = InfraTask::where('team_id', $this->teamId())
             ->when($this->serverId, fn ($q) => $q->where('infra_server_id', $this->serverId))
             ->find($id);
+
+        return $task && app(InfraAccess::class)->canTask(Auth::user(), $task, $cap) ? $task : null;
+    }
+
+    /** Server des Teams, an dem der User arbeiten darf (Maßnahmen anlegen/umhängen). */
+    protected function writableServerId(?int $serverId): ?int
+    {
+        if (!$serverId) {
+            return null;
+        }
+        $server = InfraServer::where('team_id', $this->teamId())->find($serverId);
+
+        return $server && app(InfraAccess::class)->canServer(Auth::user(), $server, 'write') ? (int) $server->id : null;
     }
 
     public function addTask(): void
     {
         $service = app(InfraTaskService::class);
         $this->validate(['newTitle' => ['required', 'string', 'max:255']], [], ['newTitle' => 'Titel']);
+        $serverId = $this->serverId ?? $this->newServerId;
+        if ($serverId && !$this->writableServerId($serverId)) {
+            abort(403);
+        }
         $service->create($this->teamId(), [
             'title' => $this->newTitle,
-            'server_id' => $this->serverId ?? $this->newServerId,
+            'server_id' => $serverId,
         ], Auth::id());
         $this->newTitle = '';
     }
@@ -82,7 +111,7 @@ class TaskBoard extends Component
 
     public function openTask(int $id): void
     {
-        $task = $this->task($id);
+        $task = $this->task($id, 'read');
         if (!$task) {
             return;
         }
@@ -124,9 +153,8 @@ class TaskBoard extends Component
 
         $status = $data['status'];
         unset($data['status']);
-        if (!empty($data['infra_server_id'])
-            && !InfraServer::where('team_id', $this->teamId())->whereKey($data['infra_server_id'])->exists()) {
-            $data['infra_server_id'] = null;
+        if (!empty($data['infra_server_id']) && (int) $data['infra_server_id'] !== (int) $task->infra_server_id) {
+            $data['infra_server_id'] = $this->writableServerId((int) $data['infra_server_id']);
         }
         foreach ($data as $k => $v) {
             $task->{$k} = $v === '' ? null : $v;
@@ -148,20 +176,24 @@ class TaskBoard extends Component
     public function render()
     {
         $teamId = $this->teamId();
+        $access = app(InfraAccess::class);
+        $user = Auth::user();
         $base = InfraTask::query()
-            ->with(['server:id,name', 'finding:id,status,severity', 'userInCharge:id,name'])
+            ->with(['server', 'finding:id,status,severity', 'userInCharge:id,name'])
             ->where('team_id', $teamId)
             ->when($this->serverId, fn ($q) => $q->where('infra_server_id', $this->serverId));
 
         $columns = [];
         foreach (InfraTask::STATUSES as $status) {
             $q = (clone $base)->where('status', $status);
-            $columns[$status] = $status === InfraTask::STATUS_DONE
+            $columns[$status] = $access->visibleTasks($user, $status === InfraTask::STATUS_DONE
                 ? $q->orderByDesc('done_at')->limit(20)->get()
-                : $q->orderBy('position')->get();
+                : $q->orderBy('position')->get());
         }
 
-        $servers = $this->serverId ? collect() : InfraServer::where('team_id', $teamId)->watched()->orderBy('name')->get(['id', 'name']);
+        $editTask = $this->showEdit && $this->editId ? $this->task($this->editId, 'read') : null;
+        $writable = fn ($servers) => $servers->filter(fn ($s) => $access->canServer($user, $s, 'write'))->values();
+        $servers = $this->serverId ? collect() : $writable(InfraServer::where('team_id', $teamId)->watched()->orderBy('name')->get());
         $members = $this->showEdit
             ? (\Platform\Core\Models\Team::find($teamId)?->users()->orderBy('users.name')->get(['users.id', 'users.name'])
                 ->map(fn ($u) => ['value' => $u->id, 'label' => $u->name])->all() ?? [])
@@ -171,9 +203,12 @@ class TaskBoard extends Component
             'columns' => $columns,
             'serverOptions' => $servers->map(fn ($s) => ['value' => $s->id, 'label' => $s->name])->all(),
             'allServerOptions' => $this->showEdit
-                ? InfraServer::where('team_id', $teamId)->orderBy('name')->get(['id', 'name'])->map(fn ($s) => ['value' => $s->id, 'label' => $s->name])->all()
+                ? $writable(InfraServer::where('team_id', $teamId)->orderBy('name')->get())
+                    ->when($editTask?->server, fn ($c) => $c->push($editTask->server)->unique('id')->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)->values())
+                    ->map(fn ($s) => ['value' => $s->id, 'label' => $s->name])->all()
                 : [],
             'members' => $members,
+            'canEditTask' => $editTask && $access->canTask($user, $editTask, 'write'),
         ]);
     }
 }

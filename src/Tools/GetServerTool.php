@@ -49,6 +49,9 @@ class GetServerTool implements ToolContract, ToolMetadataContract
             if (!$server) {
                 return ToolResult::error('NOT_FOUND', 'Server nicht gefunden.');
             }
+            if (!$this->access()->canServer($context->user, $server, 'read')) {
+                return $this->denied();
+            }
 
             $findings = $server->findings()->open()
                 ->orderByRaw("FIELD(severity, 'critical', 'warning', 'info')")

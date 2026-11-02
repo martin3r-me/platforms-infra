@@ -55,6 +55,9 @@ class UpdateTaskTool implements ToolContract, ToolMetadataContract
             if (!$task) {
                 return ToolResult::error('NOT_FOUND', 'Maßnahme nicht gefunden.');
             }
+            if (!$this->access()->canTask($context->user, $task, 'write')) {
+                return $this->denied();
+            }
             if (isset($arguments['priority']) && !in_array($arguments['priority'], InfraTask::PRIORITIES, true)) {
                 return ToolResult::error('VALIDATION_ERROR', 'priority ungültig.');
             }

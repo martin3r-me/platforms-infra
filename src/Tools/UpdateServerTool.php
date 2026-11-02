@@ -48,6 +48,9 @@ class UpdateServerTool implements ToolContract, ToolMetadataContract
             if (!$server) {
                 return ToolResult::error('NOT_FOUND', 'Server nicht gefunden.');
             }
+            if (!$this->access()->canServer($context->user, $server, 'write')) {
+                return $this->denied();
+            }
             foreach (['environment' => InfraServer::ENVIRONMENTS, 'provider' => InfraServer::PROVIDERS, 'status' => InfraServer::STATUSES] as $k => $allowed) {
                 if (isset($arguments[$k]) && !in_array($arguments[$k], $allowed, true)) {
                     return ToolResult::error('VALIDATION_ERROR', "{$k} muss einer von: " . implode(', ', $allowed) . ' sein.');
@@ -62,7 +65,9 @@ class UpdateServerTool implements ToolContract, ToolMetadataContract
                     return ToolResult::error('VALIDATION_ERROR', 'Name ist leer oder bereits vergeben.');
                 }
             }
-            $server->update($changes);
+            $server->fill($changes);
+            $this->access()->adoptByResponsible($server);
+            $server->save();
 
             return ToolResult::success(['server' => $this->serverPayload($server->fresh()), 'changed' => array_keys($changes)]);
         } catch (\Throwable $e) {

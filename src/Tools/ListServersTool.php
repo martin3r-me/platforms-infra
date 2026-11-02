@@ -43,7 +43,9 @@ class ListServersTool implements ToolContract, ToolMetadataContract
                 return $resolved['error'];
             }
 
-            $query = InfraServer::where('team_id', $resolved['team_id'])->withCount($this->openCounts());
+            $query = InfraServer::where('team_id', $resolved['team_id'])
+                ->whereIn('id', $this->access()->visibleServerIds($context->user, $resolved['team_id']))
+                ->withCount($this->openCounts());
             if (!empty($arguments['status'])) {
                 $query->where('status', $arguments['status']);
             } else {

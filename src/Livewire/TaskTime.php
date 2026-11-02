@@ -19,6 +19,8 @@ class TaskTime extends Time
     public function mount(?int $taskId = null): void
     {
         parent::mount();
+        $task = $taskId ? InfraTask::find($taskId) : null;
+        abort_unless($task && \Illuminate\Support\Facades\Gate::allows('view', $task), 403);
         $this->taskId = $taskId;
         $this->contextType = InfraTask::class;
         $this->contextId = $taskId;

@@ -16,6 +16,7 @@ class InfraServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->mergeConfigFrom(__DIR__.'/../config/infra.php', 'infra');
+        $this->app->scoped(\Platform\Infra\Services\InfraAccess::class);
 
         if ($this->app->runningInConsole()) {
             $this->commands([
@@ -74,6 +75,9 @@ class InfraServiceProvider extends ServiceProvider
         ], 'config');
 
         $this->loadViewsFrom(__DIR__ . '/../resources/views', 'infra');
+
+        \Illuminate\Support\Facades\Gate::policy(\Platform\Infra\Models\InfraServer::class, \Platform\Infra\Policies\InfraServerPolicy::class);
+        \Illuminate\Support\Facades\Gate::policy(\Platform\Infra\Models\InfraTask::class, \Platform\Infra\Policies\InfraTaskPolicy::class);
 
         $this->registerLivewireComponents();
         $this->registerTools();

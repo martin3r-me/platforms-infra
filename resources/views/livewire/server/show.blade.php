@@ -16,10 +16,18 @@
             ['label' => 'Infra', 'icon' => 'server-stack', 'href' => route('infra.dashboard')],
             ['label' => $server->name],
         ]">
-            <x-nx-button variant="secondary" size="sm" wire:click="openEdit">
-                @svg('heroicon-o-pencil-square', 'w-4 h-4')
-                <span>Bearbeiten</span>
-            </x-nx-button>
+            @if($unclaimed)
+                <x-nx-button variant="primary" size="sm" wire:click="claim" title="Vom Agent angemeldet und noch in keiner Orga-Einheit — übernehmen, um ihn verknüpfen zu können">
+                    @svg('heroicon-o-hand-raised', 'w-4 h-4')
+                    <span>Übernehmen</span>
+                </x-nx-button>
+            @endif
+            @if($canEdit)
+                <x-nx-button variant="secondary" size="sm" wire:click="openEdit">
+                    @svg('heroicon-o-pencil-square', 'w-4 h-4')
+                    <span>Bearbeiten</span>
+                </x-nx-button>
+            @endif
         </x-ui-page-actionbar>
     </x-slot>
 
@@ -87,6 +95,7 @@
                                         · {{ $f->occurrence_count }}× gesehen, zuerst {{ $f->first_seen_at?->format('d.m.Y H:i') }}, zuletzt {{ $f->last_seen_at?->diffForHumans() }}
                                     </div>
                                 </div>
+                                @if($canEdit)
                                 <div class="flex flex-wrap gap-2">
                                     @if($f->status === InfraFinding::STATUS_OPEN)
                                         <x-nx-button size="sm" variant="ghost" wire:click="startTransition({{ $f->id }}, 'acknowledged')">In Arbeit</x-nx-button>
@@ -103,6 +112,7 @@
                                         <x-nx-button size="sm" variant="ghost" wire:click="startTransition({{ $f->id }}, 'open')">Wieder öffnen</x-nx-button>
                                     @endif
                                 </div>
+                                @endif
                             </div>
                             @if($f->detail)
                                 <pre class="text-xs whitespace-pre-wrap break-words text-[color:var(--nx-muted)] bg-[color:var(--nx-bg)] rounded-[6px] p-3 max-h-48 overflow-auto">{{ $f->detail }}</pre>
@@ -249,6 +259,7 @@
             @if($server->notes)
                 <x-nx-card><div class="text-sm whitespace-pre-wrap text-[color:var(--nx-text)]">{{ $server->notes }}</div></x-nx-card>
             @endif
+            @if($canDelete)
             <div>
                 @if($confirmDelete)
                     <div class="flex flex-wrap items-center gap-3">
@@ -260,6 +271,7 @@
                     <x-nx-button variant="ghost" size="sm" wire:click="$set('confirmDelete', true)">Server entfernen</x-nx-button>
                 @endif
             </div>
+            @endif
         @endif
     </x-ui-page-container>
 

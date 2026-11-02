@@ -30,6 +30,16 @@ trait ResolvesInfraTeam
         return ['team_id' => (int) $team->getRootTeam()->id, 'error' => null];
     }
 
+    protected function access(): \Platform\Infra\Services\InfraAccess
+    {
+        return app(\Platform\Infra\Services\InfraAccess::class);
+    }
+
+    protected function denied(): ToolResult
+    {
+        return ToolResult::error('ACCESS_DENIED', 'Keine Berechtigung für dieses Objekt (Orga-Verortung oder Ersteller).');
+    }
+
     protected function serverPayload(InfraServer $s): array
     {
         return $s->toAgentArray() + [

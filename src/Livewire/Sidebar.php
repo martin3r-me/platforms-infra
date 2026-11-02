@@ -24,6 +24,7 @@ class Sidebar extends Component
                 ->orderBy('name')
                 ->get()
             : collect();
+        $servers = auth()->user() ? app(\Platform\Infra\Services\InfraAccess::class)->visibleServers(auth()->user(), $servers) : collect();
 
         return view('infra::livewire.sidebar', ['servers' => $servers]);
     }

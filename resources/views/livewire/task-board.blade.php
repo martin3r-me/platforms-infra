@@ -75,6 +75,7 @@
             @endif
         </div>
         <x-slot name="footer">
+            @if($canEditTask)
             <div class="flex flex-wrap items-center justify-between gap-3">
                 @if($confirmDelete)
                     <div class="flex items-center gap-2">
@@ -90,6 +91,11 @@
                     <x-nx-button variant="primary" wire:click="saveTask">Speichern</x-nx-button>
                 </div>
             </div>
+            @else
+                <div class="flex justify-end">
+                    <x-nx-button variant="ghost" wire:click="$set('showEdit', false)">Schließen</x-nx-button>
+                </div>
+            @endif
         </x-slot>
     </x-nx-modal>
 </div>

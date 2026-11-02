@@ -52,6 +52,9 @@ class UpdateFindingTool implements ToolContract, ToolMetadataContract
             if (!$finding) {
                 return ToolResult::error('NOT_FOUND', 'Befund nicht gefunden.');
             }
+            if (!$finding->server || !$this->access()->canServer($context->user, $finding->server, 'write')) {
+                return $this->denied();
+            }
 
             $finding->transition($arguments['status'], $context->user->id, $arguments['note'] ?? null);
 

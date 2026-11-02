@@ -13,6 +13,7 @@ use Platform\Infra\Models\InfraFinding;
 use Platform\Infra\Models\InfraLogEntry;
 use Platform\Infra\Models\InfraServer;
 use Platform\Infra\Models\InfraTask;
+use Platform\Infra\Services\InfraAccess;
 use Platform\Infra\Services\InfraTeamResolver;
 
 class Show extends Component
@@ -39,7 +40,15 @@ class Show extends Component
     public function mount(InfraServer $server): void
     {
         abort_unless((int) $server->team_id === InfraTeamResolver::rootTeamId(Auth::user()), 404);
+        $this->authorize('view', $server);
         $this->server = $server;
+    }
+
+    /** Unbeanspruchten Server übernehmen (der User wird Ersteller → kann ihn in die Orga hängen). */
+    public function claim(): void
+    {
+        $this->authorize('update', $this->server);
+        app(InfraAccess::class)->claim(Auth::user(), $this->server);
     }
 
     protected function pageContext(): ?Model
@@ -69,6 +78,7 @@ class Show extends Component
     /** "Maßnahme" on a finding: create a linked task and show the board. */
     public function taskFromFinding(int $findingId): void
     {
+        $this->authorize('update', $this->server);
         $finding = InfraFinding::where('infra_server_id', $this->server->id)->find($findingId);
         if ($finding) {
             $open = InfraTask::where('infra_finding_id', $finding->id)->notDone()->exists();
@@ -81,6 +91,7 @@ class Show extends Component
 
     public function openEdit(): void
     {
+        $this->authorize('update', $this->server);
         $this->resetValidation();
         $this->form = $this->formFromServer($this->server);
         $this->showEdit = true;
@@ -88,13 +99,17 @@ class Show extends Component
 
     public function saveServer(): void
     {
+        $this->authorize('update', $this->server);
         $data = $this->validatedForm($this->server->team_id, $this->server->id);
-        $this->server->update($data);
+        $this->server->fill($data);
+        app(InfraAccess::class)->adoptByResponsible($this->server);
+        $this->server->save();
         $this->showEdit = false;
     }
 
     public function deleteServer(): void
     {
+        $this->authorize('delete', $this->server);
         $this->server->delete();
         $this->redirectRoute('infra.dashboard', navigate: true);
     }
@@ -127,6 +142,7 @@ class Show extends Component
 
     protected function applyTransition(int $findingId, string $status, ?string $note): void
     {
+        $this->authorize('update', $this->server);
         $finding = InfraFinding::where('infra_server_id', $this->server->id)->find($findingId);
         $finding?->transition($status, Auth::id(), $note);
     }
@@ -192,7 +208,13 @@ class Show extends Component
         $taskByFinding = InfraTask::where('infra_server_id', $this->server->id)->notDone()
             ->whereNotNull('infra_finding_id')->pluck('id', 'infra_finding_id');
 
+        $access = app(InfraAccess::class);
+        $user = Auth::user();
+
         return view('infra::livewire.server.show', [
+            'canEdit' => $access->canServer($user, $this->server, 'write'),
+            'canDelete' => $access->canServer($user, $this->server, 'manage'),
+            'unclaimed' => $access->isUnclaimed($this->server),
             'tabCounts' => $tabCounts,
             'security' => $security,
             'taskByFinding' => $taskByFinding,

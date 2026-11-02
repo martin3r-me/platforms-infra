@@ -52,6 +52,12 @@ class CreateTaskTool implements ToolContract, ToolMetadataContract
             if (empty($arguments['title']) && empty($arguments['finding_id'])) {
                 return ToolResult::error('VALIDATION_ERROR', 'title oder finding_id ist erforderlich.');
             }
+            $serverId = !empty($arguments['server_id']) ? (int) $arguments['server_id']
+                : (!empty($arguments['finding_id']) ? \Platform\Infra\Models\InfraFinding::where('team_id', $resolved['team_id'])->find((int) $arguments['finding_id'])?->infra_server_id : null);
+            $server = $serverId ? \Platform\Infra\Models\InfraServer::where('team_id', $resolved['team_id'])->find($serverId) : null;
+            if ($serverId && (!$server || !$this->access()->canServer($context->user, $server, 'write'))) {
+                return $this->denied();
+            }
             $task = app(InfraTaskService::class)->create($resolved['team_id'], $arguments, $context->user->id);
 
             return ToolResult::success(['task' => $task->fresh(['server', 'finding'])->toAgentArray()]);

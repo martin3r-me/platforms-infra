@@ -46,7 +46,8 @@ class ListFindingsTool implements ToolContract, ToolMetadataContract
             }
 
             $status = $arguments['status'] ?? 'open';
-            $query = InfraFinding::with('server:id,name')->where('team_id', $resolved['team_id']);
+            $query = InfraFinding::with('server:id,name')->where('team_id', $resolved['team_id'])
+                ->whereIn('infra_server_id', $this->access()->visibleServerIds($context->user, $resolved['team_id']));
             if ($status === 'open') {
                 $query->open();
             } elseif ($status !== 'all') {

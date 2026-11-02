@@ -43,13 +43,14 @@ class ListTasksTool implements ToolContract, ToolMetadataContract
                 return $resolved['error'];
             }
             $status = $arguments['status'] ?? null;
-            $rows = InfraTask::with(['server:id,name', 'finding:id,status'])
+            $rows = InfraTask::with(['server', 'finding:id,status'])
                 ->where('team_id', $resolved['team_id'])
                 ->when($status === null, fn ($q) => $q->notDone())
                 ->when($status && $status !== 'all', fn ($q) => $q->where('status', $status))
                 ->when(!empty($arguments['server_id']), fn ($q) => $q->where('infra_server_id', (int) $arguments['server_id']))
                 ->orderBy('status')->orderBy('position')
                 ->limit(300)->get();
+            $rows = $this->access()->visibleTasks($context->user, $rows);
 
             return ToolResult::success(['tasks' => $rows->map(fn (InfraTask $t) => $t->toAgentArray())->all(), 'count' => $rows->count()]);
         } catch (\Throwable $e) {
