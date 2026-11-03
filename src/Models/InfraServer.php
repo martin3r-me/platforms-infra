@@ -209,6 +209,9 @@ class InfraServer extends Model implements HasChildContextRelations
             'status' => $this->status,
             'health' => $this->health(),
             'last_seen_at' => $this->last_seen_at?->toIso8601String(),
+            'user_in_charge_id' => $this->user_in_charge_id,
+            // Zeit buchen: organization.time_entries.POST mit diesem Kontext
+            'time_context' => ['context_type' => 'infra_server', 'context_id' => $this->id],
         ];
     }
 

@@ -40,6 +40,9 @@
             <span class="text-sm text-[color:var(--nx-muted)]">
                 {{ collect([$server->role, $server->os, $server->ip_private, $server->ip_public])->filter()->implode(' · ') }}
             </span>
+            <span class="ml-auto text-sm text-[color:var(--nx-muted)]">
+                Verantwortlich: <span class="text-[color:var(--nx-text)]">{{ $server->userInCharge?->name ?? '—' }}</span>
+            </span>
         </div>
 
         <x-nx-stat-grid :cols="4">
@@ -275,23 +278,6 @@
         @endif
     </x-ui-page-container>
 
-    <x-slot name="sidebar">
-        <x-ui-page-sidebar title="Server" width="w-80" :defaultOpen="true">
-            <div class="p-6 space-y-6">
-                <div>
-                    <h3 class="text-xs font-semibold uppercase tracking-wide text-[color:var(--nx-faint)] mb-3">Offen</h3>
-                    <div class="space-y-2 text-sm">
-                        <div class="flex justify-between"><span class="text-[color:var(--nx-muted)]">Kritisch</span><span class="tabular-nums">{{ $server->open_critical_count }}</span></div>
-                        <div class="flex justify-between"><span class="text-[color:var(--nx-muted)]">Warnungen</span><span class="tabular-nums">{{ $server->open_warning_count }}</span></div>
-                    </div>
-                </div>
-                <div>
-                    <h3 class="text-xs font-semibold uppercase tracking-wide text-[color:var(--nx-faint)] mb-3">Verantwortlich</h3>
-                    <div class="text-sm text-[color:var(--nx-text)]">{{ $server->userInCharge?->name ?? '—' }}</div>
-                </div>
-            </div>
-        </x-ui-page-sidebar>
-    </x-slot>
 
     <x-nx-modal size="lg" wire:model="showEdit">
         <x-slot name="header">Server bearbeiten</x-slot>

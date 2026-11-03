@@ -18,6 +18,9 @@ use Platform\Infra\Models\InfraTask;
  * bearbeitet jeder infra-Nutzer des Root-Teams — sonst könnte sie niemand übernehmen
  * oder aufhängen. Löschen (manage) bleibt dem Graphen bzw. Ersteller vorbehalten.
  *
+ * Verantwortlicher (user_in_charge) darf lesen und schreiben, nicht löschen — so arbeitet
+ * ein Agent wie Jazz weiter, auch wenn ein Mensch den Server übernommen/eingehängt hat.
+ *
  * Befunde, Logs und Metriken gehören zum Server und folgen ihm. Maßnahmen: Ersteller
  * ODER über ihren Server; ohne Server und ohne menschlichen Ersteller wie unbeansprucht.
  */
@@ -38,6 +41,7 @@ class InfraAccess
 
         return $this->cache["s:{$user->id}:{$server->id}:{$cap}"] ??= (
             $this->resolver->owns($user, InfraServer::class, (int) $server->id)
+            || ($cap !== 'manage' && (int) $server->user_in_charge_id === (int) $user->id)
             || $this->resolver->may($user, $cap, InfraServer::class, (int) $server->id)
             || ($cap !== 'manage' && $this->isUnclaimed($server))
         );
@@ -51,6 +55,7 @@ class InfraAccess
 
         return $this->cache["t:{$user->id}:{$task->id}:{$cap}"] ??= (
             $this->resolver->owns($user, InfraTask::class, (int) $task->id)
+            || ($cap !== 'manage' && (int) $task->user_in_charge_id === (int) $user->id)
             || ($task->server ? $this->canServer($user, $task->server, $cap) : ($cap !== 'manage' && ! $this->hasHumanCreator($task->created_by_user_id)))
         );
     }

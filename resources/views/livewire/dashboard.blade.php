@@ -199,46 +199,7 @@
         </x-nx-section>
     </x-ui-page-container>
 
-    <x-slot name="sidebar">
-        <x-ui-page-sidebar title="Übersicht" width="w-80" :defaultOpen="true">
-            <div class="p-6 space-y-6">
-                <div>
-                    <h3 class="text-xs font-semibold uppercase tracking-wide text-[color:var(--nx-faint)] mb-3">Zustand</h3>
-                    <div class="space-y-1 text-sm">
-                        @foreach([InfraServer::HEALTH_CRITICAL, InfraServer::HEALTH_WARNING, InfraServer::HEALTH_STALE, InfraServer::HEALTH_UNKNOWN, InfraServer::HEALTH_OK] as $h)
-                            @php $n = $servers->where('health_state', $h)->count(); @endphp
-                            <div class="flex items-center justify-between rounded-[6px] px-1 py-0.5">
-                                <x-nx-badge :variant="InfraServer::healthVariant($h)" dot>{{ InfraServer::healthLabel($h) }}</x-nx-badge>
-                                <span class="tabular-nums {{ $n ? 'text-[color:var(--nx-text)]' : 'text-[color:var(--nx-faint)]' }}">{{ $n }}</span>
-                            </div>
-                        @endforeach
-                    </div>
-                </div>
-                <div>
-                    <h3 class="text-xs font-semibold uppercase tracking-wide text-[color:var(--nx-faint)] mb-3">So entsteht das Bild</h3>
-                    <p class="text-sm text-[color:var(--nx-muted)]">
-                        Der Beobachter erkennt die Server beim Anbieter, prüft sie regelmäßig und meldet Messwerte,
-                        Befunde und Fehler-Logs. Was bei einer Prüfung nicht mehr auftaucht, gilt als behoben.
-                    </p>
-                </div>
-            </div>
-        </x-ui-page-sidebar>
-    </x-slot>
 
-    <x-slot name="activity">
-        <x-ui-page-sidebar title="Zuletzt behoben" width="w-80" :defaultOpen="false" storeKey="activityOpen" side="right">
-            <div class="p-6 space-y-3">
-                @forelse($recentlyResolved as $f)
-                    <a href="{{ route('infra.servers.show', $f->infra_server_id) }}" wire:navigate class="block rounded-[6px] p-1.5 -m-1.5 text-sm hover:bg-[color:var(--nx-hover)]">
-                        <div class="text-[color:var(--nx-text)]">{{ $f->title }}</div>
-                        <div class="text-xs text-[color:var(--nx-muted)]">{{ $f->server?->name }} · {{ $f->resolved_at?->diffForHumans() }}</div>
-                    </a>
-                @empty
-                    <div class="text-sm text-[color:var(--nx-muted)]">Noch nichts behoben.</div>
-                @endforelse
-            </div>
-        </x-ui-page-sidebar>
-    </x-slot>
 
     <x-nx-modal size="lg" wire:model="showCreate">
         <x-slot name="header">Server anlegen</x-slot>

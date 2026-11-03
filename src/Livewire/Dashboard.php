@@ -132,20 +132,10 @@ class Dashboard extends Component
             'last_check' => $all->max('last_seen_at'),
         ];
 
-        $recentlyResolved = InfraFinding::query()
-            ->with('server:id,name')
-            ->where('team_id', $teamId)
-            ->whereIn('infra_server_id', $visibleIds)
-            ->where('status', InfraFinding::STATUS_RESOLVED)
-            ->orderByDesc('resolved_at')
-            ->limit(8)
-            ->get();
-
         return view('infra::livewire.dashboard', [
             'servers' => $servers,
             'counts' => $counts,
             'openFindings' => $openFindings,
-            'recentlyResolved' => $recentlyResolved,
             'stats' => $stats,
             'options' => $this->formOptions(),
         ])->layout('platform::layouts.app');

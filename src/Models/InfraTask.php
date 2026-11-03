@@ -141,6 +141,8 @@ class InfraTask extends Model
             'done_at' => $this->done_at?->toIso8601String(),
             'done_note' => $this->done_note,
             'created_at' => $this->created_at?->toIso8601String(),
+            // Zeit buchen: organization.time_entries.POST mit diesem Kontext (zählt beim Server mit)
+            'time_context' => ['context_type' => self::class, 'context_id' => $this->id],
         ];
     }
 }
